@@ -1,0 +1,6 @@
+test/
+node_modules/
+*.log
+package-lock.json
+.gitignore
+vitest.config.*
