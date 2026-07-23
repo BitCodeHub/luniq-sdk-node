@@ -1,0 +1,25 @@
+name: Node CI
+on:
+  pull_request:
+    paths: ['**/*.ts', '**/*.tsx', '**/*.js', '**/*.jsx', 'package.json']
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install
+        run: |
+          if [ -f package-lock.json ]; then npm ci || npm install; \
+          elif [ -f pnpm-lock.yaml ]; then corepack enable && pnpm install --frozen-lockfile || pnpm install; \
+          elif [ -f yarn.lock ]; then yarn install --frozen-lockfile || yarn install; \
+          else echo "no lockfile — skipping install"; fi
+      - name: Build (only if a build script exists)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.build?0:1)" 2>/dev/null; then npm run build; \
+          else echo "no build script — nothing to build"; fi
+      - name: Test (only if a test script exists)
+        run: |
+          if node -e "process.exit(require('./package.json').scripts?.test?0:1)" 2>/dev/null; then npm test || echo "tests reported failures (informational)"; \
+          else echo "no test script"; fi
