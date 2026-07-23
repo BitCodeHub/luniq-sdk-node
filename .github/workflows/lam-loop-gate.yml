@@ -1,0 +1,33 @@
+name: Lam Loop Gate
+# Argus evidence gate for the Lam Loop. Language-agnostic: it checks that a PR
+# carries the minimum evidence to be reviewable — a real description and a linked
+# issue (or an explicit waiver) — so lam-review has a required status check to
+# validate against. It does NOT build the app (that's each repo's own CI), so it
+# can never false-fail on a build system it doesn't control. Passes on any
+# compliant PR; fails only when evidence is missing.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR evidence
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          fail=0
+          words=$(printf '%s' "$BODY" | wc -w | tr -d ' ')
+          if [ "$words" -ge 8 ]; then echo "✓ PR has a real description ($words words)"
+          else echo "✗ PR description too thin (need ≥8 words explaining the change)"; fail=1; fi
+
+          if printf '%s %s' "$TITLE" "$BODY" | grep -qiE '(#[0-9]+|[A-Z]{2,}-[0-9]+|closes|fixes|linear\.app|no-issue-needed)'; then
+            echo "✓ PR links an issue (or explicitly waives)"
+          else
+            echo "✗ PR does not link an issue (add #123 / TEAM-123, or 'no-issue-needed')"; fail=1
+          fi
+
+          if [ "$fail" -eq 0 ]; then echo "✅ Lam Loop gate: evidence present"; else
+            echo "❌ Lam Loop gate: supply the missing evidence above"; exit 1; fi
