@@ -1,0 +1,34 @@
+name: Lam Loop Slack Notify
+# Surfaces Lam Loop state transitions in Slack. Slack is a NOTIFICATION surface —
+# GitHub/Linear remain the source of truth. Requires repo secret SLACK_WEBHOOK_URL
+# (a Slack incoming-webhook URL). If the secret is unset, the job no-ops quietly.
+on:
+  pull_request:
+    types: [labeled]
+  issues:
+    types: [labeled]
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post to Slack on a Lam Loop transition
+        env:
+          HOOK: ${{ secrets.SLACK_WEBHOOK_URL }}
+          LABEL: ${{ github.event.label.name }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          REPO: ${{ github.repository }}
+        run: |
+          [ -z "$HOOK" ] && { echo "SLACK_WEBHOOK_URL unset — skipping (add it to enable Slack)"; exit 0; }
+          msg=""
+          case "$LABEL" in
+            loop-approved)          msg="✅ *Merge-ready* — reviewer approved, CI green. You merge.\n<$PR_URL|$PR_TITLE>  ($REPO)";;
+            needs-human-review)     msg="⚠️ *Escalated — needs your judgment*.\n<$PR_URL|$PR_TITLE>  ($REPO)";;
+            blocked)                msg="⛔ *Blocked — awaiting your answer*.\n<$ISSUE_URL|$ISSUE_TITLE>  ($REPO)";;
+            *) echo "label '$LABEL' is not a Lam Loop transition — skip"; exit 0;;
+          esac
+          curl -s -X POST -H 'Content-type: application/json' \
+            --data "$(python3 -c "import json,os;print(json.dumps({'text':os.environ['msg']}))" 2>/dev/null || printf '{"text":"%s"}' "$msg")" \
+            "$HOOK" >/dev/null && echo "posted to Slack: $LABEL"
